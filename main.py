@@ -619,12 +619,12 @@ async def modified_watch_for_data_url_from_subgraph(
 ##############################################################################################################
 ################################## MAIN REQUEST FUNCTION #############################################################
 ##############################################################################################################
-async def make_mech_request(prompt: str, agent_id: int):
+async def make_mech_request(prompt: str, agent_id: int, tool: Optional[str] = None) -> Optional[str]:
     contract_address = await query_agent_address(agent_id=agent_id, timeout=30)
     wss = websocket.create_connection(WSS_ENDPOINT)
     crypto = EthereumCrypto(private_key_path=private_key_path)
     ledger_api = EthereumApi(**LEDGER_CONFIG)
-    tool = 'prediction-online'
+    tool = tool or 'prediction-offline'
     tool = verify_or_retrieve_tool(agent_id=agent_id, ledger_api=ledger_api, tool=tool)
     abi = get_abi(contract_address=contract_address)
     mech_contract = get_contract(
