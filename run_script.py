@@ -58,29 +58,33 @@ prompts = [
     'Will a new major scientific breakthrough or innovation occur in a particular field by 2024?'
 ]
 
-def send_request(num_calls):
+async def send_request_async(num_calls, timeout_duration):
     start_time = time.time()
     initialize_db()
 
     prompt = random.choice(prompts)
     agent_id = 6
     tool = 'prediction-offline'
-    # extras = {'model': 'gpt-4-0125-preview'}
     extras = None
 
     for i in range(num_calls):
+        call_start_time = time.time()
         try:
-            # request_id = await make_mech_request(prompt, agent_id, tool=tool, extra_attributes=extras)
-            request_id = asyncio.run(make_mech_request(prompt, agent_id, tool=tool, extra_attributes=extras))
+            request_id = await asyncio.wait_for(make_mech_request(prompt, agent_id, tool=tool, extra_attributes=extras), timeout_duration)
             if request_id is not None:
                 insert_request_id(request_id)
+        except asyncio.TimeoutError:
+            print(f"Request {i+1} timed out after {timeout_duration} seconds")
         except Exception as e:
             print(e)
-            continue
+        else:
+            print(f"Request {i+1} sent in {time.time() - call_start_time} seconds")
 
     print(f"Time taken: {time.time() - start_time} seconds")
 
+def send_request(num_calls, timeout_duration=240):
+    asyncio.run(send_request_async(num_calls, timeout_duration))
 
 
 if __name__ == '__main__':
-    send_request(10) # Number of requests to be sent, change as needed
+    send_request(2000) # Number of requests to be sent, change as needed
