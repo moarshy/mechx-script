@@ -597,7 +597,7 @@ async def watch_for_data_url_from_subgraph(
     :return: Data URL if available within timeout, otherwise None.
     :rtype: Optional[str]
     """
-    timeout = timeout or DEFAULT_TIMEOUT
+    timeout = timeout or TIMEOUT
     start_time = asyncio.get_event_loop().time()
     while True:
         response = await query_deliver_hash(request_id=request_id)
@@ -615,7 +615,7 @@ async def watch_for_data_url_from_subgraph(
 async def modified_watch_for_data_url_from_subgraph(
     request_id: str, timeout: Optional[float] = None
 ) -> Optional[str]:
-    timeout = timeout or DEFAULT_TIMEOUT
+    timeout = timeout or TIMEOUT
     response = await query_deliver_hash(request_id=request_id)
     if response is not None:
         return f"https://gateway.autonolas.tech/ipfs/{response}"
