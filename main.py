@@ -452,7 +452,12 @@ def send_request(  # pylint: disable=too-many-arguments,too-many-locals
             time.sleep(sleep)
 
     
-def wait_for_receipt(tx_hash: str, ledger_api: EthereumApi, timeout_seconds: int = TIMEOUT, retry_interval: int = 10) -> Dict:
+def wait_for_receipt(
+    tx_hash: str, 
+    ledger_api: EthereumApi, 
+    timeout_seconds: int = TIMEOUT, 
+    retry_interval: int = MAX_RETRIES
+) -> Dict:
     """
     Wait for a transaction receipt with retry and timeout.
 
@@ -475,59 +480,95 @@ def wait_for_receipt(tx_hash: str, ledger_api: EthereumApi, timeout_seconds: int
     return None
 
 
+# def watch_for_request_id(
+#     wss: websocket.WebSocket,
+#     mech_contract: Web3Contract,
+#     ledger_api: EthereumApi,
+#     request_signature: str,
+#     timeout_seconds: int = TIMEOUT,
+# ) -> str:
+#     """
+#     Watches for events on mech.
+
+#     :param wss: The WebSocket connection object.
+#     :type wss: websocket.WebSocket
+#     :param mech_contract: The mech contract instance.
+#     :type mech_contract: Web3Contract
+#     :param ledger_api: The Ethereum API used for interacting with the ledger.
+#     :type ledger_api: EthereumApi
+#     :param request_signature: Topic signature for Request event
+#     :type request_signature: str
+#     :param timeout_seconds: Maximum time to wait for the request ID.
+#     :type timeout_seconds: int
+#     :return: The requested ID or None if timeout.
+#     :rtype: str or None
+#     """
+#     start_time = time.time()  # Record the start time
+#     while True:
+#         # Check for timeout
+#         if time.time() - start_time > timeout_seconds:
+#             print("Timeout waiting for request ID.")
+#             return None  # Or handle the timeout as needed
+
+#         # Set the WebSocket to non-blocking
+#         wss.settimeout(timeout_seconds - (time.time() - start_time))
+
+#         try:
+#             msg = wss.recv()
+#         except websocket.WebSocketTimeoutException:
+#             print("Timeout waiting for a message.")
+#             return None  # Or handle the timeout as needed
+#         except Exception as e:
+#             print(f"Error receiving message: {e}")
+#             return None  # Or handle other exceptions as needed
+
+#         data = json.loads(msg)
+#         tx_hash = data["params"]["result"]["transactionHash"]
+#         tx_receipt = wait_for_receipt(tx_hash=tx_hash, ledger_api=ledger_api)
+#         event_signature = tx_receipt["logs"][0]["topics"][0].hex()
+#         if event_signature != request_signature:
+#             continue
+
+#         rich_logs = mech_contract.events.Request().process_receipt(tx_receipt)
+#         request_id = str(rich_logs[0]["args"]["requestId"])
+#         return request_id
+    
 def watch_for_request_id(
     wss: websocket.WebSocket,
-    mech_contract: Web3Contract,
-    ledger_api: EthereumApi,
+    mech_contract,
+    ledger_api,
     request_signature: str,
     timeout_seconds: int = TIMEOUT,
 ) -> str:
-    """
-    Watches for events on mech.
-
-    :param wss: The WebSocket connection object.
-    :type wss: websocket.WebSocket
-    :param mech_contract: The mech contract instance.
-    :type mech_contract: Web3Contract
-    :param ledger_api: The Ethereum API used for interacting with the ledger.
-    :type ledger_api: EthereumApi
-    :param request_signature: Topic signature for Request event
-    :type request_signature: str
-    :param timeout_seconds: Maximum time to wait for the request ID.
-    :type timeout_seconds: int
-    :return: The requested ID or None if timeout.
-    :rtype: str or None
-    """
-    start_time = time.time()  # Record the start time
+    start_time = time.time()
     while True:
-        # Check for timeout
-        if time.time() - start_time > timeout_seconds:
+        elapsed_time = time.time() - start_time
+        if elapsed_time >= timeout_seconds:
             print("Timeout waiting for request ID.")
-            return None  # Or handle the timeout as needed
+            return None
 
-        # Set the WebSocket to non-blocking
-        wss.settimeout(timeout_seconds - (time.time() - start_time))
+        # Calculate remaining timeout and ensure it's positive
+        remaining_timeout = max(0.1, timeout_seconds - elapsed_time)  # Ensuring a minimum non-zero timeout
+        wss.settimeout(remaining_timeout)
 
         try:
             msg = wss.recv()
         except websocket.WebSocketTimeoutException:
             print("Timeout waiting for a message.")
-            return None  # Or handle the timeout as needed
+            return None
         except Exception as e:
             print(f"Error receiving message: {e}")
-            return None  # Or handle other exceptions as needed
+            return None
 
         data = json.loads(msg)
-        tx_hash = data["params"]["result"]["transactionHash"]
-        tx_receipt = wait_for_receipt(tx_hash=tx_hash, ledger_api=ledger_api)
-        event_signature = tx_receipt["logs"][0]["topics"][0].hex()
-        if event_signature != request_signature:
-            continue
-
-        rich_logs = mech_contract.events.Request().process_receipt(tx_receipt)
-        request_id = str(rich_logs[0]["args"]["requestId"])
-        return request_id
-    
+        tx_hash = data.get("params", {}).get("result", {}).get("transactionHash")
+        if tx_hash:
+            tx_receipt = wait_for_receipt(tx_hash=tx_hash, ledger_api=ledger_api)
+            event_signature = tx_receipt["logs"][0]["topics"][0].hex()
+            if event_signature == request_signature:
+                rich_logs = mech_contract.events.Request().process_receipt(tx_receipt)
+                request_id = str(rich_logs[0]["args"]["requestId"])
+                return request_id
 
 ##############################################################################################################
 ################################## DELIVER EVENT #############################################################
