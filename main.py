@@ -351,7 +351,9 @@ def push_to_ipfs_with_retries(file_path: str, max_retries: int = MAX_RETRIES, ti
     return None, None
 
 
-def push_metadata_to_ipfs(prompt: str, tool: str) -> Tuple[str, str]:
+def push_metadata_to_ipfs(
+    prompt: str, tool: str, extra_attributes: Optional[Dict[str, Any]] = None
+) -> Tuple[str, str]:
     """
     Pushes metadata object to IPFS.
 
@@ -359,10 +361,14 @@ def push_metadata_to_ipfs(prompt: str, tool: str) -> Tuple[str, str]:
     :type prompt: str
     :param tool: Tool string.
     :type tool: str
+    :param extra_attributes: Extra attributes to be included in the request metadata.
+    :type extra_attributes: Optional[Dict[str,Any]]
     :return: Tuple containing the IPFS hash and truncated IPFS hash.
     :rtype: Tuple[str, str]
     """
     metadata = {"prompt": prompt, "tool": tool, "nonce": str(uuid.uuid4())}
+    if extra_attributes:
+        metadata.update(extra_attributes)
     dirpath = tempfile.mkdtemp()
     file_name = dirpath + "metadata.json"
     with open(file_name, "w", encoding="utf-8") as f:
@@ -382,6 +388,7 @@ def send_request(  # pylint: disable=too-many-arguments,too-many-locals
     retries: Optional[int] = None,
     timeout: Optional[float] = None,
     sleep: Optional[float] = None,
+    extra_attributes: Optional[Dict[str, Any]] = None,
 ) -> None:
     """
     Sends a request to the mech.
@@ -405,7 +412,7 @@ def send_request(  # pylint: disable=too-many-arguments,too-many-locals
     :param sleep: Amount of sleep before retrying the transaction
     :type sleep: float
     """
-    v1_file_hash_hex_truncated, v1_file_hash_hex = push_metadata_to_ipfs(prompt, tool)
+    v1_file_hash_hex_truncated, v1_file_hash_hex = push_metadata_to_ipfs(prompt, tool, extra_attributes)
     print(f"Prompt uploaded: https://gateway.autonolas.tech/ipfs/{v1_file_hash_hex}")
     method_name = "request"
     methord_args = {"data": v1_file_hash_hex_truncated}
@@ -546,7 +553,7 @@ DELIVER_QUERY_TEMPLATE = Template(
 }
 """
 )
-DEFAULT_TIMEOUT = 600.0
+
 
 async def query_deliver_hash(
     request_id: str, timeout: Optional[float] = None
@@ -619,11 +626,19 @@ async def modified_watch_for_data_url_from_subgraph(
 ##############################################################################################################
 ################################## MAIN REQUEST FUNCTION #############################################################
 ##############################################################################################################
-async def make_mech_request(prompt: str, agent_id: int, tool: Optional[str] = None) -> Optional[str]:
+async def make_mech_request(
+    prompt: str, 
+    agent_id: int, 
+    tool: Optional[str] = None,
+    extra_attributes: Optional[Dict[str, Any]] = None,
+) -> Optional[str]:
+    """Async function to make a request to the mech."""
+
     contract_address = await query_agent_address(agent_id=agent_id, timeout=30)
     wss = websocket.create_connection(WSS_ENDPOINT)
     crypto = EthereumCrypto(private_key_path=private_key_path)
     ledger_api = EthereumApi(**LEDGER_CONFIG)
+
     tool = tool or 'prediction-offline'
     tool = verify_or_retrieve_tool(agent_id=agent_id, ledger_api=ledger_api, tool=tool)
     abi = get_abi(contract_address=contract_address)
@@ -647,6 +662,7 @@ async def make_mech_request(prompt: str, agent_id: int, tool: Optional[str] = No
         timeout=180,
         retries=3,
         sleep=3,
+        extra_attributes=extra_attributes,
     ) 
 
     request_id = watch_for_request_id(
