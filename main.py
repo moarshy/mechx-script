@@ -59,7 +59,7 @@ private_key_path = './ethereum_private_key.txt'
 
 MAX_RETRIES = 3
 WAIT_SLEEP = 3.0
-TIMEOUT = 120.0
+TIMEOUT = 60.0
 SUBGRAPH_TIMEOUT = 30.0
 
 # Ignore a specific warning message
@@ -456,7 +456,7 @@ def wait_for_receipt(
     tx_hash: str, 
     ledger_api: EthereumApi, 
     timeout_seconds: int = TIMEOUT, 
-    retry_interval: int = MAX_RETRIES
+    retry_interval: int = 10
 ) -> Dict:
     """
     Wait for a transaction receipt with retry and timeout.
@@ -563,6 +563,7 @@ def watch_for_request_id(
         data = json.loads(msg)
         tx_hash = data.get("params", {}).get("result", {}).get("transactionHash")
         if tx_hash:
+            print(f"Transaction hash received: {tx_hash}") 
             tx_receipt = wait_for_receipt(tx_hash=tx_hash, ledger_api=ledger_api)
             event_signature = tx_receipt["logs"][0]["topics"][0].hex()
             if event_signature == request_signature:

@@ -1,6 +1,7 @@
 import time
 import random
 import asyncio
+from datetime import datetime
 from main import make_mech_request
 from db import initialize_db, insert_request_id
 
@@ -58,6 +59,16 @@ prompts = [
     'Will a new major scientific breakthrough or innovation occur in a particular field by 2024?'
 ]
 
+async def make_request_with_timeout(prompt, agent_id, tool, extras, timeout_duration):
+    try:
+        # Wrap the make_mech_request call in a task
+        task = asyncio.create_task(make_mech_request(prompt, agent_id, tool=tool, extra_attributes=extras))
+        return await asyncio.wait_for(task, timeout_duration)
+    except asyncio.TimeoutError:
+        task.cancel()  # Attempt to cancel the task
+        print(f"Request timed out after {timeout_duration} seconds")
+        return None
+
 async def send_request_async(num_calls, timeout_duration):
     start_time = time.time()
     initialize_db()
@@ -70,19 +81,18 @@ async def send_request_async(num_calls, timeout_duration):
     for i in range(num_calls):
         call_start_time = time.time()
         try:
-            request_id = await asyncio.wait_for(make_mech_request(prompt, agent_id, tool=tool, extra_attributes=extras), timeout_duration)
+            request_id = await make_request_with_timeout(prompt, agent_id, tool, extras, timeout_duration)
             if request_id is not None:
                 insert_request_id(request_id)
-        except asyncio.TimeoutError:
-            print(f"Request {i+1} timed out after {timeout_duration} seconds")
         except Exception as e:
             print(e)
         else:
             print(f"Request {i+1} sent in {time.time() - call_start_time} seconds")
+            print(f"Current time: {datetime.now()}")
 
     print(f"Time taken: {time.time() - start_time} seconds")
 
-def send_request(num_calls, timeout_duration=240):
+def send_request(num_calls, timeout_duration=60):
     asyncio.run(send_request_async(num_calls, timeout_duration))
 
 
